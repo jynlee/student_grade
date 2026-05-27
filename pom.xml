@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  pom.xml - Maven 프로젝트 설정 파일
+  Maven이 이 파일을 읽어 필요한 라이브러리를 자동으로 다운로드하고
+  프로젝트를 WAR 파일로 빌드하는 방법을 결정합니다.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <!-- Maven POM 파일의 버전 (항상 4.0.0) -->
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- ==================== 프로젝트 기본 정보 ==================== -->
+    <!-- groupId: 회사/조직명을 거꾸로 쓴 패키지 형태 -->
+    <groupId>com.example</groupId>
+    <!-- artifactId: 프로젝트(모듈) 이름 -->
+    <artifactId>grade-system</artifactId>
+    <!-- version: 현재 개발 중임을 나타내는 SNAPSHOT -->
+    <version>1.0.0-SNAPSHOT</version>
+    <!-- packaging: Tomcat에 배포할 WAR 파일로 빌드 -->
+    <packaging>war</packaging>
+
+    <name>grade-system</name>
+    <description>Spring Legacy MVC - 성적 관리 시스템</description>
+
+    <!-- ==================== 버전 상수 정의 ==================== -->
+    <!-- 여기서 버전을 한 곳에서 관리하면 나중에 업그레이드가 편합니다 -->
+    <properties>
+        <!-- Spring Framework 5.3.x: Java 11 + Tomcat 9와 호환되는 최신 Spring 5 버전 -->
+        <spring.version>5.3.39</spring.version>
+        <!-- Java 소스 코드 버전 -->
+        <java.version>11</java.version>
+        <!-- 소스 파일 인코딩: 한글 깨짐 방지 -->
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+    </properties>
+
+    <!-- ==================== 의존성(라이브러리) 목록 ==================== -->
+    <dependencies>
+
+        <!-- ===== Spring Framework ===== -->
+
+        <!-- Spring MVC: DispatcherServlet, @Controller, @RequestMapping 등 웹 계층 -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-webmvc</artifactId>
+            <version>${spring.version}</version>
+        </dependency>
+
+        <!-- Spring JDBC: JdbcTemplate으로 DB 쿼리를 편리하게 실행 -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-jdbc</artifactId>
+            <version>${spring.version}</version>
+        </dependency>
+
+        <!-- ===== 데이터베이스 ===== -->
+
+        <!-- PostgreSQL JDBC 드라이버: Java에서 PostgreSQL에 접속하기 위한 드라이버 -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>42.7.4</version>
+            <!-- runtime: 컴파일 시에는 필요 없고 실행 시에만 필요 -->
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- ===== JSON 처리 ===== -->
+
+        <!-- Jackson: Java 객체 <-> JSON 자동 변환 (@ResponseBody, @RequestBody에 필요) -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.17.2</version>
+        </dependency>
+
+        <!-- ===== Servlet / JSP / JSTL ===== -->
+
+        <!-- Servlet API: HttpServletRequest, HttpServletResponse 등
+             scope=provided: Tomcat이 이미 제공하므로 WAR에 포함시키지 않음 -->
+        <dependency>
+            <groupId>javax.servlet</groupId>
+            <artifactId>javax.servlet-api</artifactId>
+            <!-- Tomcat 9는 Servlet 4.0 스펙을 구현 -->
+            <version>4.0.1</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- JSP API: JSP 파일에서 사용하는 기능들
+             scope=provided: Tomcat이 이미 제공 -->
+        <dependency>
+            <groupId>javax.servlet.jsp</groupId>
+            <artifactId>javax.servlet.jsp-api</artifactId>
+            <version>2.3.3</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- JSTL: JSP에서 <c:forEach>, <c:if> 등의 태그를 사용하기 위한 라이브러리 -->
+        <dependency>
+            <groupId>javax.servlet</groupId>
+            <artifactId>jstl</artifactId>
+            <version>1.2</version>
+        </dependency>
+
+        <!-- ===== 테스트 ===== -->
+
+        <!-- JUnit: 단위 테스트 작성 및 실행
+             scope=test: 테스트 컴파일/실행 시에만 사용, WAR에 포함 안 됨 -->
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.13.2</version>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
+
+    <!-- ==================== 빌드 설정 ==================== -->
+    <build>
+        <!-- 최종 WAR 파일 이름 (grade-system.war → Tomcat의 webapps/grade-system/) -->
+        <finalName>grade-system</finalName>
+
+        <plugins>
+
+            <!-- Maven 컴파일러 플러그인: Java 11로 컴파일 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <source>${java.version}</source>
+                    <target>${java.version}</target>
+                    <encoding>${project.build.sourceEncoding}</encoding>
+                </configuration>
+            </plugin>
+
+            <!-- Maven WAR 플러그인: WAR 파일 패키징 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-war-plugin</artifactId>
+                <version>3.4.0</version>
+                <configuration>
+                    <!-- web.xml이 없어도 빌드 실패하지 않도록 (우리는 web.xml 있으므로 false) -->
+                    <failOnMissingWebXml>true</failOnMissingWebXml>
+                </configuration>
+            </plugin>
+
+        </plugins>
+    </build>
+
+</project>

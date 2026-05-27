@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  servlet-context.xml - Spring MVC Servlet Application Context 설정 파일
+  DispatcherServlet이 이 파일을 읽어 웹 계층 빈들을 생성합니다.
+  root-context.xml에서 생성된 빈(DataSource, JdbcTemplate 등)을 자식 컨텍스트로서 참조할 수 있습니다.
+
+  이 파일에서 관리하는 빈:
+  - mvc:annotation-driven: @Controller, @RequestMapping 등 MVC 어노테이션 활성화
+  - component-scan: @Controller 클래스 자동 등록
+  - InternalResourceViewResolver: Controller가 반환한 뷰 이름을 실제 JSP 경로로 변환
+  - mvc:resources: CSS, JS, 이미지 같은 정적 파일은 Spring이 처리하지 않고 바로 서비스
+-->
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:mvc="http://www.springframework.org/schema/mvc"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xsi:schemaLocation="
+           http://www.springframework.org/schema/beans
+           https://www.springframework.org/schema/beans/spring-beans.xsd
+           http://www.springframework.org/schema/mvc
+           https://www.springframework.org/schema/mvc/spring-mvc.xsd
+           http://www.springframework.org/schema/context
+           https://www.springframework.org/schema/context/spring-context.xsd">
+
+    <!-- ==================== 1. MVC 어노테이션 활성화 ==================== -->
+    <!--
+      mvc:annotation-driven: Spring MVC가 어노테이션 기반으로 동작하도록 설정합니다.
+      이 태그 하나로 다음 기능들이 자동으로 활성화됩니다:
+      - @Controller, @RequestMapping, @GetMapping, @PostMapping 처리
+      - @RequestBody, @ResponseBody (JSON 변환, Jackson 자동 연동)
+      - @PathVariable, @RequestParam 파라미터 바인딩
+      - @Valid, @Validated 폼 데이터 검증
+    -->
+    <mvc:annotation-driven/>
+
+    <!-- ==================== 2. 컴포넌트 스캔 (웹 계층만) ==================== -->
+    <!--
+      Servlet 컨텍스트에서는 @Controller만 스캔합니다.
+      @Service, @Repository는 root-context.xml에서 이미 스캔했으므로
+      여기서 중복 스캔하면 빈이 2개 생성되는 문제가 발생할 수 있습니다.
+    -->
+    <context:component-scan base-package="com.example">
+        <!-- @Controller와 @ControllerAdvice 어노테이션만 스캔 대상으로 포함 -->
+        <context:include-filter type="annotation"
+            value="org.springframework.stereotype.Controller"/>
+        <context:include-filter type="annotation"
+            value="org.springframework.web.bind.annotation.ControllerAdvice"/>
+        <!-- 나머지(@Service, @Repository 등)는 이 컨텍스트에서 스캔하지 않음 -->
+        <context:exclude-filter type="annotation"
+            value="org.springframework.stereotype.Service"/>
+        <context:exclude-filter type="annotation"
+            value="org.springframework.stereotype.Repository"/>
+        <context:exclude-filter type="annotation"
+            value="org.springframework.stereotype.Component"/>
+    </context:component-scan>
+
+    <!-- ==================== 3. 정적 리소스 처리 ==================== -->
+    <!--
+      mvc:resources: CSS, JavaScript, 이미지 파일 같은 정적 파일 요청은
+      DispatcherServlet이 처리하지 않고 해당 위치의 파일을 직접 서비스합니다.
+
+      예시:
+        브라우저 요청: GET /resources/css/style.css
+        실제 파일 위치: src/main/webapp/resources/css/style.css
+    -->
+    <mvc:resources mapping="/resources/**" location="/resources/"/>
+
+    <!-- ==================== 4. View Resolver 설정 ==================== -->
+    <!--
+      InternalResourceViewResolver: Controller가 반환한 "논리적 뷰 이름"을
+      실제 JSP 파일 경로로 변환하는 역할을 합니다.
+
+      변환 규칙: prefix + 뷰이름 + suffix
+      예시:
+        Controller 반환값: "grade/list"
+        실제 JSP 경로:     /WEB-INF/views/grade/list.jsp
+
+      WEB-INF 안에 JSP를 두는 이유:
+        클라이언트가 URL로 JSP 파일에 직접 접근하는 것을 막기 위함입니다.
+        반드시 Controller를 거쳐야만 JSP를 볼 수 있습니다.
+    -->
+    <bean class="org.springframework.web.servlet.view.InternalResourceViewResolver">
+        <!-- JSP 파일이 위치한 디렉터리 경로 (앞에 붙이는 문자열) -->
+        <property name="prefix" value="/WEB-INF/views/"/>
+        <!-- 파일 확장자 (뒤에 붙이는 문자열) -->
+        <property name="suffix" value=".jsp"/>
+        <!--
+          order: ViewResolver가 여러 개일 때 우선순위 (숫자가 낮을수록 먼저 시도)
+          InternalResourceViewResolver는 항상 마지막에 시도되어야 합니다.
+        -->
+        <property name="order" value="1"/>
+    </bean>
+
+</beans>
