@@ -1,0 +1,246 @@
+# ================================================================
+# docker-compose.yml - 성적 관리 시스템 전체 컨테이너 구성
+# ================================================================
+#
+# Docker Compose: 여러 컨테이너를 하나의 파일로 정의하고
+#                 한 번에 실행/중지/관리할 수 있는 도구입니다.
+#
+# [서비스 구성]
+#   postgres: PostgreSQL 데이터베이스 서버
+#   app:      Spring MVC 웹 애플리케이션 (Tomcat)
+#
+# ┌─────────────────────────────────────────────────┐
+# │              grade-network (내부 네트워크)        │
+# │                                                 │
+# │  ┌──────────────┐     ┌───────────────────┐     │
+# │  │   postgres   │◄────│       app         │     │
+# │  │ (port 5432)  │     │  Tomcat (port 8080)│    │
+# │  └──────┬───────┘     └────────┬──────────┘    │
+# └─────────│─────────────────────│────────────────┘
+#           │                     │
+#       (로컬 5432)           (로컬 8181)
+#       DB 직접 접근          브라우저 접근
+#       (개발 편의용)
+#
+# [주요 명령어]
+#   docker compose up --build      # 이미지 빌드 후 실행 (포그라운드)
+#   docker compose up --build -d   # 이미지 빌드 후 백그라운드 실행
+#   docker compose down            # 중지 + 컨테이너 삭제 (볼륨은 유지)
+#   docker compose down -v         # 중지 + 컨테이너 + 볼륨 삭제 (DB 데이터 포함)
+#   docker compose logs app        # app 컨테이너 로그 확인
+#   docker compose logs postgres   # postgres 컨테이너 로그 확인
+#   docker compose logs -f         # 전체 로그 실시간 확인 (-f: follow)
+#   docker compose ps              # 실행 중인 컨테이너 상태 확인
+# ================================================================
+
+# Compose 파일 형식 버전 (3.8은 healthcheck start_period 등 대부분 기능 지원)
+version: '3.8'
+
+
+# ================================================================
+# services: 실행할 컨테이너들을 정의합니다.
+# ================================================================
+services:
+
+  # ==============================================================
+  # [서비스 1] postgres - PostgreSQL 데이터베이스
+  # ==============================================================
+  postgres:
+
+    # 사용할 Docker Hub 공식 이미지
+    # postgres:15 → PostgreSQL 15 버전 (안정적이고 최신 기능 포함)
+    image: postgres:15
+
+    # 컨테이너 이름 (docker ps 로 확인 시 표시)
+    # 지정하지 않으면 Docker가 무작위 이름을 자동 생성합니다.
+    container_name: grade-postgres
+
+    # ----------------------------------------------------------
+    # 환경 변수: PostgreSQL 컨테이너 초기 설정
+    # 컨테이너가 처음 생성될 때 이 값으로 DB와 계정을 자동 생성합니다.
+    # (이미 볼륨에 데이터가 있으면 이 설정은 무시됩니다)
+    # ----------------------------------------------------------
+    environment:
+      # 생성할 데이터베이스 이름
+      # → src/main/resources/db.properties 의 db.url 과 일치해야 합니다.
+      POSTGRES_DB: studentdb
+
+      # 접속 계정 이름
+      # → db.properties 의 db.username 과 일치해야 합니다.
+      POSTGRES_USER: student
+
+      # 접속 비밀번호
+      # → db.properties 의 db.password 와 일치해야 합니다.
+      POSTGRES_PASSWORD: student123
+
+    # ----------------------------------------------------------
+    # 볼륨(Volume) 마운트
+    # 컨테이너를 삭제/재생성해도 데이터가 유지됩니다.
+    # ----------------------------------------------------------
+    volumes:
+      # [볼륨 1] 데이터 영속성(Persistence)
+      # Named Volume 'postgres-data' → 컨테이너 내부 DB 데이터 저장 경로
+      #
+      # Named Volume이란?
+      #   Docker가 자체적으로 관리하는 저장소입니다.
+      #   'docker compose down'으로 컨테이너를 삭제해도 데이터는 남아있습니다.
+      #   'docker compose down -v'를 실행해야 볼륨까지 삭제됩니다.
+      #
+      # /var/lib/postgresql/data: PostgreSQL이 내부 데이터를 저장하는 경로
+      - postgres-data:/var/lib/postgresql/data
+
+      # [볼륨 2] 초기화 SQL 자동 실행
+      # 호스트의 ./init.sql → 컨테이너 내부 경로로 파일을 마운트합니다.
+      #
+      # /docker-entrypoint-initdb.d/ 폴더의 특징:
+      #   PostgreSQL 컨테이너가 처음 시작될 때(데이터가 없을 때)
+      #   이 폴더 안의 .sql, .sh 파일을 알파벳 순서대로 자동 실행합니다.
+      #   → init.sql이 자동으로 실행되어 테이블과 샘플 데이터가 생성됩니다.
+      #
+      # 중요: 볼륨에 이미 DB 데이터가 있으면 이 폴더의 파일을 실행하지 않습니다.
+      #       재실행이 필요하면 'docker compose down -v'로 볼륨을 삭제 후 재시작하세요.
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+
+    # ----------------------------------------------------------
+    # 포트 매핑: "호스트 포트:컨테이너 포트"
+    # 로컬 PC에서 DBeaver, pgAdmin 등으로 직접 DB에 접속할 때 사용합니다.
+    # 앱 ↔ DB 컨테이너 통신은 내부 네트워크(grade-network)를 사용하므로
+    # 이 설정은 외부(로컬 개발 도구) 접근을 위한 것입니다.
+    # ----------------------------------------------------------
+    ports:
+      - "5432:5432"
+
+    # 연결할 내부 네트워크
+    networks:
+      - grade-network
+
+    # ----------------------------------------------------------
+    # 헬스체크 (Health Check)
+    #
+    # [문제 상황]
+    #   컨테이너가 '시작(started)' 상태가 되었다고 해서
+    #   PostgreSQL이 즉시 연결 가능한 상태가 되는 것은 아닙니다.
+    #   내부 초기화 과정에 수 초~수십 초가 걸립니다.
+    #
+    #   app 컨테이너가 PostgreSQL이 준비되기 전에 시작하면:
+    #   → "Connection refused" 오류로 Tomcat이 시작 실패합니다.
+    #
+    # [해결책]
+    #   헬스체크로 PostgreSQL이 실제로 준비됐는지 확인하고,
+    #   app 서비스의 depends_on 에서 'service_healthy' 조건을 사용합니다.
+    #   → PostgreSQL 헬스체크 통과 후에만 app 컨테이너를 시작합니다.
+    #
+    # pg_isready: PostgreSQL 연결 수락 여부를 확인하는 내장 명령어
+    #   -U student: student 사용자로 확인
+    #   -d studentdb: studentdb 데이터베이스 확인
+    # ----------------------------------------------------------
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U student -d studentdb"]
+      # 헬스체크를 10초 간격으로 실행합니다.
+      interval: 10s
+      # 5초 안에 응답이 없으면 이번 시도는 실패로 처리합니다.
+      timeout: 5s
+      # 5번 연속 실패해야 'unhealthy' 상태로 변경됩니다.
+      retries: 5
+      # 컨테이너 시작 후 처음 15초는 헬스체크 실패를 무시합니다.
+      # (PostgreSQL 초기 구동 및 init.sql 실행 시간을 확보)
+      start_period: 15s
+
+
+  # ==============================================================
+  # [서비스 2] app - Spring MVC 웹 애플리케이션 (Tomcat)
+  # ==============================================================
+  app:
+
+    # build: 이미지를 Docker Hub에서 가져오는 대신 직접 빌드합니다.
+    build:
+      # context: Dockerfile이 있는 디렉터리 경로
+      # . → 현재 디렉터리 (docker-compose.yml과 같은 폴더)
+      context: .
+      # 사용할 Dockerfile 파일명 (기본값이 'Dockerfile'이므로 생략 가능하나 명시)
+      dockerfile: Dockerfile
+
+    # 컨테이너 이름
+    container_name: grade-app
+
+    # ----------------------------------------------------------
+    # 포트 매핑: "호스트 포트:컨테이너 포트"
+    # 8181(내 PC 브라우저) → 8080(컨테이너 내부 Tomcat 포트)
+    #
+    # 브라우저에서 http://localhost:8181 로 접속합니다.
+    # ----------------------------------------------------------
+    ports:
+      - "8181:8080"
+
+    # ----------------------------------------------------------
+    # 의존성 설정 (Dependency)
+    # depends_on: app 컨테이너는 postgres 컨테이너가 준비된 후에 시작합니다.
+    #
+    # condition: service_healthy
+    #   → postgres의 healthcheck가 'healthy' 상태가 된 후에 app 시작
+    #   → 단순히 컨테이너가 '시작됨(started)'이 아닌
+    #     PostgreSQL이 실제로 연결 가능한 상태임을 보장합니다.
+    # ----------------------------------------------------------
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    # 연결할 내부 네트워크
+    # postgres 서비스와 같은 네트워크에 있어야 통신이 가능합니다.
+    networks:
+      - grade-network
+
+    # ----------------------------------------------------------
+    # 재시작 정책
+    # on-failure: 비정상 종료(exit code ≠ 0) 시 자동 재시작
+    #
+    # 이 설정이 필요한 이유:
+    #   healthcheck + depends_on 으로 대부분 보호되지만
+    #   간혹 PostgreSQL 초기화 중 타이밍 이슈로 앱이 실패할 수 있습니다.
+    #   자동 재시작으로 이런 상황을 복구합니다.
+    # ----------------------------------------------------------
+    restart: on-failure
+
+
+# ================================================================
+# volumes: Docker가 관리하는 Named Volume 정의
+# ================================================================
+#
+# Named Volume vs 바인드 마운트:
+#   Named Volume (여기서 사용):
+#     - Docker가 직접 관리하는 저장소
+#     - 위치: Docker Desktop → Volumes 탭에서 확인 가능
+#     - 컨테이너 삭제 후에도 데이터 유지
+#     - 성능이 좋고 Docker 도구로 관리 가능
+#
+#   바인드 마운트 (./init.sql:/docker-entrypoint-initdb.d/init.sql):
+#     - 호스트 파일 시스템의 특정 경로를 컨테이너에 직접 연결
+#     - ./init.sql 처럼 상대 경로 사용
+# ================================================================
+volumes:
+  # postgres-data: PostgreSQL DB 데이터를 영구 저장하는 볼륨
+  # 컨테이너를 삭제해도 여기 있는 데이터는 유지됩니다.
+  # 완전히 초기화하려면: docker compose down -v
+  postgres-data:
+    driver: local
+    # driver: local → 로컬 머신(내 PC)에 데이터를 저장합니다. (기본값)
+
+
+# ================================================================
+# networks: Docker 내부 가상 네트워크 정의
+# ================================================================
+#
+# 같은 네트워크에 속한 컨테이너끼리는 서비스 이름으로 서로 통신합니다.
+#
+# 예시:
+#   app 컨테이너 → postgres 컨테이너 접속:
+#   jdbc:postgresql://postgres:5432/studentdb
+#                      ^^^^^^^^
+#                   서비스 이름이 호스트명이 됩니다.
+#   (localhost, IP 주소 대신 서비스 이름 사용 - Docker 네트워크의 핵심!)
+# ================================================================
+networks:
+  grade-network:
+    # bridge: 기본 네트워크 드라이버
+    # 컨테이너 간 통신이 가능하고, 컨테이너에서 외부 인터넷에도 접근 가능합니다.
+    driver: bridge
